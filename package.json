@@ -1,7 +1,7 @@
 {
     "name": "music",
     "private": true,
-    "version": "0.4.90",
+    "version": "0.4.91",
     "description": "Ghxsty Music desktop player",
     "author": "Ghxsty",
     "type": "module",
