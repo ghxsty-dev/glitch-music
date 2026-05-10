@@ -1,0 +1,55 @@
+name: Discord Release Notify
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send release message to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_RELEASE_WEBHOOK_URL secret is missing."
+            exit 1
+          fi
+
+          TITLE="${RELEASE_NAME:-Yeni sürüm yayınlandı}"
+          TAG="${RELEASE_TAG:-unknown}"
+          URL="${RELEASE_URL:-https://github.com/$REPO_NAME/releases}"
+          NOTES="${RELEASE_BODY:-Sürüm notu girilmemiş.}"
+          NOTES_TRIMMED=$(printf "%s" "$NOTES" | head -c 1500)
+
+          jq -n \
+            --arg title "$TITLE" \
+            --arg tag "$TAG" \
+            --arg url "$URL" \
+            --arg repo "$REPO_NAME" \
+            --arg notes "$NOTES_TRIMMED" \
+            '{
+              "username": "GLITCH Music Updates",
+              "embeds": [
+                {
+                  "title": "Yeni sürüm: \($title)",
+                  "url": $url,
+                  "color": 5814783,
+                  "description": "Repo: **\($repo)**\nTag: **\($tag)**",
+                  "fields": [
+                    { "name": "Sürüm Notları", "value": $notes }
+                  ]
+                }
+              ]
+            }' > payload.json
+
+          curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            --data @payload.json
