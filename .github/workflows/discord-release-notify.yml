@@ -43,7 +43,7 @@ jobs:
                 {
                   "title": "Yeni sürüm: \($title)",
                   "url": $url,
-                  "color": #ffffff,
+                  "color": 16777215,
                   "description": "Repo: **\($repo)**\nTag: **\($tag)**",
                   "thumbnail": { "url": "https://cdn.discordapp.com/attachments/1495430127817850970/1495499306550034472/GLITCHLOGO.png?ex=6a022743&is=6a00d5c3&hm=5015ad6480d81d3003c2ff8d58942b905ab978de0b4f86444225194bf913032a&" },
                   "fields": [
