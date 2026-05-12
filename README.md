@@ -1,6 +1,6 @@
 # GLITCH Music 
 
-<img src="https://cdn.discordapp.com/attachments/1495430127817850970/1495499306063630456/GLITCHLOGO_1000_x_200_piksel.png?ex=6a02d003&is=6a017e83&hm=b275eeef0bfa4950cc60c8059c1898fe4ab6f0c13240b454b7cb7c0094a80db3&" width="1200" />
+<img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/GLITCHyazi%20(800%20x%20200%20piksel).png?raw=true&" width="1200" />
 
 ## Amaç
 
