@@ -10,7 +10,6 @@
 <p align="center">
   <img src="https://img.shields.io/github/downloads/ghxsty-dev/glitch-music/total?style=for-the-badge">
   <img src="https://img.shields.io/github/stars/ghxsty-dev/glitch-music?style=for-the-badge">
-  <img src="https://img.shields.io/github/license/ghxsty-dev/glitch-music?style=for-the-badge">
 </p>
 
 ---
@@ -32,9 +31,11 @@ winget install yt-dlp
 
 ## Photos in App
 
-<img align="center" src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-05-13%20172615.png?raw=true&" width="1000" />
-<img align="center" src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-05-13%20172629.png?raw=true&" width="1000" />
-<img align="center" src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-05-13%20172638.png?raw=true&" width="1000" />
+<p align="center">
+  <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20görüntüsü%202026-05-13%20172615.png?raw=true&">
+  <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20görüntüsü%202026-05-13%20172629.png?raw=true&">
+  <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20görüntüsü%202026-05-13%20172638.png?raw=true&">
+</p>
 
 ## How to Use
 
