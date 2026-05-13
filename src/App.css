@@ -281,11 +281,23 @@ img,
 .app-shell.theme-transparent .dock-output-menu,
 .app-shell.theme-transparent .queue-panel,
 .app-shell.theme-transparent .editor-cover-menu,
-.app-shell.theme-transparent .modal-card {
-  background: var(--surface-bg-strong, rgba(255, 255, 255, 0.08)) !important;
+.app-shell.theme-transparent .modal-card,
+.app-shell.theme-transparent .playlist-add-modal,
+.app-shell.theme-transparent .album-info-modal,
+.app-shell.theme-transparent .artist-profile-modal,
+.app-shell.theme-transparent .artist-release-modal,
+.app-shell.theme-transparent .bulk-edit-modal,
+.app-shell.theme-transparent .report-issue-modal,
+.app-shell.theme-transparent .dependency-modal,
+.app-shell.theme-transparent .add-modal,
+.app-shell.theme-transparent .monthly-recap-modal,
+.app-shell.theme-transparent .downloads-panel,
+.app-shell.theme-transparent .lyrics-panel {
+  background: color-mix(in srgb, var(--surface-bg-strong, rgba(255, 255, 255, 0.12)) 74%, transparent) !important;
   background-image: none !important;
   border-color: var(--surface-border, rgba(255, 255, 255, 0.2)) !important;
-  backdrop-filter: blur(18px) saturate(136%) !important;
+  backdrop-filter: blur(26px) saturate(148%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(148%) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
     0 14px 28px rgba(0, 0, 0, 0.2) !important;
@@ -320,8 +332,10 @@ img,
 .app-shell.theme-transparent .download-job-item,
 .app-shell.theme-transparent .settings-section,
 .app-shell.theme-transparent .stats-card {
-  background: var(--surface-bg, rgba(255, 255, 255, 0.06)) !important;
+  background: color-mix(in srgb, var(--surface-bg, rgba(255, 255, 255, 0.08)) 78%, transparent) !important;
   background-image: none !important;
+  backdrop-filter: blur(14px) saturate(126%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(126%) !important;
 }
 
 .app-shell.theme-transparent .notifications-panel {
@@ -3320,6 +3334,30 @@ img,
   height: calc(100vh - 114px);
 }
 
+.app-shell.sidebar-player-expanded.sidebar-player-left .dashboard {
+  grid-template-columns: var(--right-player-width) minmax(0, 1fr);
+}
+
+.app-shell.sidebar-player-expanded.sidebar-player-left .player-panel {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.app-shell.sidebar-player-expanded.sidebar-player-left .library-panel {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.app-shell.sidebar-player-expanded.sidebar-player-right .player-panel {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.app-shell.sidebar-player-expanded.sidebar-player-right .library-panel {
+  grid-column: 1;
+  grid-row: 1;
+}
+
 .app-shell.window-fill {
   padding-bottom: 16px;
 }
@@ -4474,7 +4512,7 @@ body.fullscreen-track-open .queue-panel {
 
 .modal-card.settings-modal {
   width: min(1120px, calc(100vw - 32px));
-  height: min(820px, calc(100vh - 32px));
+  height: min(900px, calc(100vh - 20px));
   max-width: none;
   max-height: none;
   padding: 18px;
@@ -4926,9 +4964,19 @@ body.fullscreen-track-open .queue-panel {
 }
 
 .settings-content.appearance-scroll-enabled {
+  display: block;
+  min-height: 0;
+  height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   max-height: 100%;
+  padding-right: 8px;
+  padding-bottom: 32px;
+}
+
+.settings-content.appearance-scroll-enabled > * + * {
+  margin-top: 12px;
 }
 
 .settings-content.system-scroll-enabled {
@@ -5404,6 +5452,7 @@ button.stats-top-item {
 }
 
 .settings-theme-list .menu-item {
+  position: relative;
   justify-content: flex-start;
   min-height: 36px;
   padding: 8px 10px;
@@ -5418,6 +5467,70 @@ button.stats-top-item {
   text-overflow: ellipsis;
 }
 
+.settings-theme-list .menu-item small,
+.menu-options .custom-theme-option small {
+  margin-left: auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+}
+
+.settings-theme-list .menu-item.custom-theme-option,
+.menu-options .custom-theme-option {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  border-color: rgba(255, 255, 255, 0.34);
+  background:
+    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.5), transparent 28%),
+    linear-gradient(135deg, #22d3ee 0%, #3b82f6 36%, #a855f7 68%, #fb7185 100%);
+  color: #ffffff;
+  box-shadow:
+    0 12px 28px rgba(59, 130, 246, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset;
+}
+
+.settings-theme-list .menu-item.custom-theme-option::before,
+.menu-options .custom-theme-option::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(112deg, transparent 20%, rgba(255, 255, 255, 0.35) 46%, transparent 72%);
+  transform: translateX(-120%);
+  animation: custom-theme-shine 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.settings-theme-list .menu-item.custom-theme-option span,
+.menu-options .custom-theme-option span {
+  position: relative;
+  color: #ffffff;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.24);
+}
+
+.settings-theme-list .menu-item.custom-theme-option.selected {
+  border-color: rgba(255, 255, 255, 0.74);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.56), transparent 30%),
+    linear-gradient(135deg, #06b6d4 0%, #2563eb 34%, #9333ea 66%, #f43f5e 100%);
+  box-shadow:
+    0 16px 34px rgba(147, 51, 234, 0.34),
+    0 0 0 2px rgba(255, 255, 255, 0.34) inset;
+}
+
+@keyframes custom-theme-shine {
+  0%, 58% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
 .settings-theme-list .menu-item.selected {
   border-color: var(--theme-accent, rgba(96, 165, 250, 0.8));
   background: var(--theme-accent, rgba(96, 165, 250, 0.32));
@@ -5428,6 +5541,14 @@ button.stats-top-item {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 8px;
+}
+
+.settings-custom-theme-picker {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--surface-border, rgba(255, 255, 255, 0.1));
 }
 
 .settings-color-field {
@@ -5487,6 +5608,10 @@ button.stats-top-item {
   height: 54px;
   min-height: 54px;
   border-radius: 12px;
+}
+
+.first-run-color-field {
+  margin-top: 10px;
 }
 
 .settings-toggle-row,
@@ -6389,7 +6514,7 @@ button.stats-top-item {
 
 .player-panel .volume-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   color: var(--text-primary, #fff);
@@ -6575,12 +6700,17 @@ button.stats-top-item {
 
 .artist-profile-about,
 .artist-profile-tracks {
-  border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.1));
-  background: color-mix(in srgb, var(--surface-bg, rgba(255, 255, 255, 0.03)) 96%, transparent);
-  border-radius: 18px;
-  padding: 18px;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
   min-height: 0;
   overflow: visible;
+}
+
+.artist-profile-merged {
+  display: grid;
+  gap: 20px;
 }
 
 .artist-profile-albums {

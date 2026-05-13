@@ -1,7 +1,7 @@
 {
     "name": "music",
     "private": true,
-    "version": "0.7.7",
+    "version": "0.7.10",
     "description": "GLITCH Music desktop player",
     "author": {
         "name": "GLITCH",
@@ -21,9 +21,11 @@
         "dist:trusted:github": "npm run build && electron-builder --win --config electron-builder.trusted.json --publish always",
         "dist:msix": "npm run build && electron-builder --win appx --publish never",
         "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
+        "dist:linux:github": "npm run build && electron-builder --linux AppImage deb --publish always",
         "dist:signed": "npm run build && electron-builder --win nsis-web -c.forceCodeSigning=true",
         "dist:github": "npm run build && electron-builder --win nsis-web --publish always",
         "dist:github:signed": "npm run build && electron-builder --win nsis-web --publish always -c.forceCodeSigning=true",
+        "dist:github:all:signed": "powershell -ExecutionPolicy Bypass -File scripts/release-all-signed.ps1",
         "dist:clean": "npm run clean:artifacts && npm run dist",
         "lint": "eslint .",
         "preview": "vite preview"
@@ -78,14 +80,6 @@
             {
                 "from": "electron/ytmusic_bridge.py",
                 "to": "bin/ytmusic_bridge.py"
-            },
-            {
-                "from": "vendor/yt-dlp.exe",
-                "to": "bin/yt-dlp.exe"
-            },
-            {
-                "from": "vendor/ffmpeg.exe",
-                "to": "bin/ffmpeg.exe"
             }
         ],
         "win": {
@@ -102,8 +96,16 @@
                 "rfc3161TimeStampServer": "http://timestamp.digicert.com",
                 "timeStampServer": "http://timestamp.digicert.com"
             },
-            "cscLink": "C:\\Users\\kivan\\code-cert.pfx",
-            "cscKeyPassword": "50181985!"
+            "extraResources": [
+                {
+                    "from": "vendor/yt-dlp.exe",
+                    "to": "bin/yt-dlp.exe"
+                },
+                {
+                    "from": "vendor/ffmpeg.exe",
+                    "to": "bin/ffmpeg.exe"
+                }
+            ]
         },
         "linux": {
             "target": [

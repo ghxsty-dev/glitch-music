@@ -38,4 +38,7 @@ build
 *.blockmap
 latest*.yml
 win-unpacked
+electron-builder.trusted.json
+*.pfx
+*.p12
 

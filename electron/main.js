@@ -315,15 +315,18 @@ const clearSpotifyAuthState = () => {
   }
 }
 
-const getSpotifyClientConfig = () => {
+const getSpotifyClientConfig = (override = {}) => {
   const normalize = (value) =>
     String(value || '')
       .replace(/\r?\n/g, '')
       .replace(/\s+/g, ' ')
       .trim()
 
-  const clientId = normalize(process.env.SPOTIFY_CLIENT_ID || process.env.VITE_SPOTIFY_CLIENT_ID)
-  const clientSecret = normalize(process.env.SPOTIFY_CLIENT_SECRET || process.env.VITE_SPOTIFY_CLIENT_SECRET)
+  const overrideClientId = normalize(override?.clientId)
+  const overrideClientSecret = normalize(override?.clientSecret)
+  const clientId = overrideClientId || normalize(process.env.SPOTIFY_CLIENT_ID || process.env.VITE_SPOTIFY_CLIENT_ID)
+  const clientSecret =
+    overrideClientSecret || normalize(process.env.SPOTIFY_CLIENT_SECRET || process.env.VITE_SPOTIFY_CLIENT_SECRET)
   if (!clientId || !clientSecret) {
     const missing = []
     if (!clientId) missing.push('clientId')
@@ -768,8 +771,8 @@ const getSpotifyAuthStatus = async () => {
   return { ok: true, connected: true, accountLabel }
 }
 
-const connectSpotifyAccount = async () => {
-  const configResult = getSpotifyClientConfig()
+const connectSpotifyAccount = async (override = {}) => {
+  const configResult = getSpotifyClientConfig(override)
   if (!configResult?.ok) return { ok: false, error: configResult?.error || 'spotify-client-missing' }
   const config = { clientId: configResult.clientId, clientSecret: configResult.clientSecret }
   const redirectUri = `http://127.0.0.1:${SPOTIFY_OAUTH_REDIRECT_PORT}${SPOTIFY_OAUTH_REDIRECT_PATH}`
@@ -2062,7 +2065,8 @@ ipcMain.handle('data:list-local-library-files', async () => {
 ipcMain.handle('check:dependencies', async () => {
   const commandExists = (cmd) => {
     try {
-      const result = spawnSync('where', [cmd], { stdio: 'ignore', timeout: 3000 })
+      const probe = process.platform === 'win32' ? 'where' : 'which'
+      const result = spawnSync(probe, [cmd], { stdio: 'ignore', timeout: 3000 })
       return result.status === 0
     } catch {
       return false
@@ -3713,24 +3717,20 @@ ipcMain.on('presence:update', (_, presence) => {
   const startMs = now - Math.floor(safeProgress * 1000)
   const endMs = safeDuration > 0 ? startMs + Math.floor(safeDuration * 1000) : 0
   
-  // Normalize cover URL and format for Discord Media Proxy
-  const normalizedCoverUrl = /^https?:\/\//i.test(coverUrl) ? coverUrl : ''
-  
-  // Discord RPC can handle external media via mp:// protocol
-  // Format: mp://external/{base64-encoded-url} or direct HTTPS for certain domains
-  const getDiscordMediaKey = (url) => {
-    if (!url) return ''
-    // Try direct URL first (works for some image hosts)
-    if (/^https:\/\/(i\.ytimg\.com|lh3\.googleusercontent\.com|images\.genius\.com|image\.genius\.com|media\.spotify\.com)/i.test(url)) {
-      return url // These domains often work directly
-    }
-    // Fallback to mp:// protocol for other URLs
+  // Discord RPC accepts public HTTPS artwork URLs. Local file/127.0.0.1 covers
+  // cannot be resolved by Discord, so the renderer sends the original remote URL.
+  const normalizedCoverUrl = (() => {
+    if (!/^https:\/\//i.test(coverUrl)) return ''
     try {
-      const encoded = Buffer.from(url).toString('base64')
-      return `mp://external/${encoded}`
+      return new URL(coverUrl).href
     } catch {
       return ''
     }
+  })()
+
+  const getDiscordMediaKey = (url) => {
+    if (!url) return ''
+    return /^https:\/\//i.test(url) ? url : ''
   }
   
   const mediaKey = normalizedCoverUrl ? getDiscordMediaKey(normalizedCoverUrl) : ''
@@ -4439,8 +4439,8 @@ ipcMain.handle('spotify:auth-status', async () => {
   return getSpotifyAuthStatus()
 })
 
-ipcMain.handle('spotify:connect', async () => {
-  return connectSpotifyAccount()
+ipcMain.handle('spotify:connect', async (_, payload) => {
+  return connectSpotifyAccount(payload || {})
 })
 
 ipcMain.handle('spotify:disconnect', async () => {
@@ -4470,9 +4470,29 @@ ipcMain.handle('lyrics:fetch-lrclib', async (_, payload) => {
     return String(item.plainLyrics || '').trim()
   }
 
+  const fetchLrcLibJson = async (url, timeoutMs = 9000) => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'GLITCH Music lyrics client',
+        },
+        cache: 'no-store',
+      })
+      clearTimeout(timeoutId)
+      return response
+    } catch (error) {
+      clearTimeout(timeoutId)
+      throw error
+    }
+  }
+
   try {
     const getUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`
-    const getRes = await fetch(getUrl, { headers: { Accept: 'application/json' } })
+    const getRes = await fetchLrcLibJson(getUrl)
     if (getRes.ok) {
       const json = await getRes.json()
       const lyrics = extractLyrics(json)
@@ -4484,7 +4504,7 @@ ipcMain.handle('lyrics:fetch-lrclib', async (_, payload) => {
 
   try {
     const searchUrl = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`
-    const searchRes = await fetch(searchUrl, { headers: { Accept: 'application/json' } })
+    const searchRes = await fetchLrcLibJson(searchUrl)
     if (searchRes.ok) {
       const json = await searchRes.json()
       if (Array.isArray(json)) {
@@ -4918,13 +4938,10 @@ const createAppTray = () => {
 }
 
 const ensureDependenciesInstalled = async () => {
-  if (process.platform !== 'win32') {
-    return { ok: true, reason: 'non-windows' }
-  }
-
   const checkCommand = (cmd) => {
     try {
-      const result = spawnSync('where', [cmd], { stdio: 'ignore', timeout: 3000 })
+      const probe = process.platform === 'win32' ? 'where' : 'which'
+      const result = spawnSync(probe, [cmd], { stdio: 'ignore', timeout: 3000 })
       return result.status === 0
     } catch {
       return false

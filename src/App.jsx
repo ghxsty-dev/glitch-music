@@ -151,7 +151,8 @@ const HOME_LATEST_RELEASE_CACHE_KEY = 'nova-player-home-latest-release'
 const HOME_MOOD_PLAYLISTS_CACHE_KEY = 'nova-player-home-mood-playlists'
 const LYRICS_TEMP_DISABLED_NOTICE =
   'Bir sonraki güncellemeye kadar kullanılamıyor. Lütfen yeni güncellemeyi bekleyin.'
-const LYRICS_TEMP_DISABLED = true
+const LYRICS_TEMP_DISABLED = false
+const LYRICS_SEARCH_TIMEOUT_MS = 20000
 const UI_LANGUAGES = ['tr', 'en']
 const UI_TEXT = {
   tr: {
@@ -196,6 +197,9 @@ const UI_TEXT = {
     gray: 'Grimsi',
     light: 'Açık',
     transparent: 'Şeffaf',
+    customTheme: 'Özel renk',
+    customThemeHint: 'Koyu, gri ve açık dışında kendi ana rengini seç.',
+    themeColor: 'Tema rengi',
     options: 'Ayarlar',
     optionsHint: 'Kullanım seçeneklerini buradan açıp kapat.',
     system: 'Sistem',
@@ -519,6 +523,9 @@ const UI_TEXT = {
     gray: 'Gray',
     light: 'Light',
     transparent: 'Transparent',
+    customTheme: 'Custom color',
+    customThemeHint: 'Pick your own main color beyond dark, gray and light.',
+    themeColor: 'Theme color',
     options: 'Options',
     optionsHint: 'Toggle app behavior options.',
     system: 'System',
@@ -1916,6 +1923,56 @@ const formatMonthKeyLabel = (monthKey = '', language = 'tr') => {
 const getTrackCoverUrl = (track, pendingCover = null) =>
   getTrackDisplayUrl(track, 'hero', pendingCover)
 
+const decodeRemoteMediaProxyUrl = (url = '') => {
+  const value = String(url || '').trim()
+  const match = value.match(/\/remote-media\/([^/?#]+)/i)
+  if (!match?.[1]) return value
+
+  try {
+    const normalizedToken = match[1].replace(/-/g, '+').replace(/_/g, '/')
+    const paddedToken = normalizedToken.padEnd(Math.ceil(normalizedToken.length / 4) * 4, '=')
+    return decodeURIComponent(escape(atob(paddedToken)))
+  } catch {
+    return value
+  }
+}
+
+const getTrackDiscordCoverUrl = (track) => {
+  const candidates = [
+    track?.coverRemoteUrl,
+    track?.remoteCoverUrl,
+    track?.artworkUrl,
+    track?.thumbnail,
+    track?.image,
+    track?.coverUrl,
+  ]
+
+  for (const candidate of candidates) {
+    const rawUrl = decodeRemoteMediaProxyUrl(candidate)
+    if (!/^https:\/\//i.test(rawUrl) || isLocalLikeAssetUrl(rawUrl)) {
+      continue
+    }
+
+    if (/itunes\.apple\.com|mzstatic\.com/i.test(rawUrl)) {
+      return upgradeCoverUrl(rawUrl, '1200x1200bb')
+    }
+
+    if (/googleusercontent\.com|ggpht\.com|ytimg\.com/i.test(rawUrl)) {
+      return rawUrl
+        .replace(/=w\d+-h\d+[^&]*/i, '=w1200-h1200')
+        .replace(/=s\d+[^&]*/i, '=s1200')
+        .replace('/mqdefault.jpg', '/hqdefault.jpg')
+        .replace('/default.jpg', '/hqdefault.jpg')
+    }
+
+    return rawUrl
+  }
+
+  return ''
+}
+
+const getTrackPublicCoverUrl = (track) => getTrackDiscordCoverUrl(track)
+
 const isKeyboardInputContext = (event) => {
   const target = event?.target instanceof Element ? event.target : null
   const active = document?.activeElement instanceof Element ? document.activeElement : null
@@ -2360,6 +2417,9 @@ const getDefaultBackgroundPalette = (mode) => {
   if (mode === 'light') {
     return { color1: '#eef1f6', color2: '#dde3ea' }
   }
+  if (mode === 'custom') {
+    return { color1: '#000000', color2: '#111827' }
+  }
   if (mode === 'transparent') {
     return { color1: '#18181b', color2: '#0f0f11' }
   }
@@ -2369,7 +2429,7 @@ const getDefaultBackgroundPalette = (mode) => {
   return { color1: '#000000', color2: '#111827' }
 }
 
-const getUiThemeVars = (mode) => {
+const getUiThemeVars = (mode, customColor = '#3b82f6') => {
   if (mode === 'light') {
     return {
       '--app-bg': 'radial-gradient(120% 120% at 8% 6%, #eef1f6 0%, #e7ebf1 48%, #dde3ea 100%)',
@@ -2428,6 +2488,45 @@ const getUiThemeVars = (mode) => {
       '--range-track': 'rgba(255, 255, 255, 0.24)',
       '--range-thumb': '#ffffff',
       '--range-progress': 'linear-gradient(90deg, #ffffff, rgba(255, 255, 255, 0.46))',
+    }
+  }
+
+  if (mode === 'custom') {
+    const base = parseColorToRgb(customColor) || { r: 59, g: 130, b: 246 }
+    const brightness = (base.r * 299 + base.g * 587 + base.b * 114) / 1000
+    const isBright = brightness >= 174
+    const surface = isBright
+      ? mixRgbColor(base, { r: 255, g: 255, b: 255 }, 0.72)
+      : mixRgbColor(base, { r: 8, g: 10, b: 16 }, 0.72)
+    const surfaceStrong = isBright
+      ? mixRgbColor(base, { r: 255, g: 255, b: 255 }, 0.82)
+      : mixRgbColor(base, { r: 12, g: 15, b: 22 }, 0.6)
+    const control = isBright
+      ? mixRgbColor(base, { r: 255, g: 255, b: 255 }, 0.62)
+      : mixRgbColor(base, { r: 24, g: 26, b: 34 }, 0.52)
+    const controlHover = isBright
+      ? mixRgbColor(base, { r: 255, g: 255, b: 255 }, 0.48)
+      : mixRgbColor(base, { r: 40, g: 44, b: 58 }, 0.42)
+    const textPrimary = isBright ? '#0f172a' : '#ffffff'
+    const textSecondary = isBright ? 'rgba(15, 23, 42, 0.68)' : 'rgba(255, 255, 255, 0.68)'
+    const textMuted = isBright ? 'rgba(15, 23, 42, 0.52)' : 'rgba(255, 255, 255, 0.50)'
+    const border = isBright ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.12)'
+
+    return {
+      '--surface-bg': rgbToRgbaCss(surface, isBright ? 0.88 : 0.9),
+      '--surface-bg-strong': rgbToRgbaCss(surfaceStrong, isBright ? 0.92 : 0.94),
+      '--surface-border': border,
+      '--text-primary': textPrimary,
+      '--text-secondary': textSecondary,
+      '--text-muted': textMuted,
+      '--control-bg': rgbToRgbaCss(control, 0.92),
+      '--control-bg-hover': rgbToRgbaCss(controlHover, 0.96),
+      '--control-strong-bg': textPrimary,
+      '--control-strong-fg': isBright ? '#ffffff' : '#0f172a',
+      '--control-border': border,
+      '--range-track': isBright ? 'rgba(15, 23, 42, 0.22)' : 'rgba(255, 255, 255, 0.22)',
+      '--range-thumb': textPrimary,
+      '--range-progress': `linear-gradient(90deg, ${textPrimary}, ${rgbToRgbaCss(base, 0.72)})`,
     }
   }
 
@@ -2689,6 +2788,35 @@ const DEPENDENCY_DOWNLOAD_LINKS = {
   ffmpeg: 'https://www.gyan.dev/ffmpeg/builds/',
   ytmusicapi: 'https://pypi.org/project/ytmusicapi/',
 }
+const DEPENDENCY_DOWNLOAD_LINKS_BY_PLATFORM = {
+  linux: {
+    python: 'https://www.python.org/downloads/source/',
+    'yt-dlp': 'https://github.com/yt-dlp/yt-dlp/wiki/Installation',
+    ffmpeg: 'https://ffmpeg.org/download.html#build-linux',
+    ytmusicapi: 'https://pypi.org/project/ytmusicapi/',
+  },
+}
+const getDependencyDownloadLink = (dep, platform = '') =>
+  DEPENDENCY_DOWNLOAD_LINKS_BY_PLATFORM[platform]?.[dep] || DEPENDENCY_DOWNLOAD_LINKS[dep] || ''
+const getDependencyInstallCommand = (dep, platform = '') => {
+  if (platform === 'linux') {
+    const linuxCommands = {
+      python: 'sudo apt update && sudo apt install -y python3 python3-pip',
+      'yt-dlp': 'python3 -m pip install --user -U yt-dlp',
+      ffmpeg: 'sudo apt update && sudo apt install -y ffmpeg',
+      ytmusicapi: 'python3 -m pip install --user -U ytmusicapi',
+    }
+    return linuxCommands[dep] || ''
+  }
+
+  const windowsCommands = {
+    python: 'winget install Python.Python.3.12',
+    'yt-dlp': 'pip install yt-dlp',
+    ffmpeg: 'winget install ffmpeg',
+    ytmusicapi: 'python -m pip install --user ytmusicapi',
+  }
+  return windowsCommands[dep] || ''
+}
 const MANUAL_DEPENDENCY_STATUS = {
   available: {},
   ytmusicapi: false,
@@ -2762,32 +2890,6 @@ const parseLyricsWithTiming = (text = '') => {
   return { hasTiming: true, lines: timed }
 }
 
-const fetchLyricsFromMakeItPersonal = async (artist, title) => {
-  try {
-    if (!window?.novaPlayer?.fetchLyricsAggregate) return ''
-    const result = await window.novaPlayer.fetchLyricsAggregate({ artist, title })
-    if (!result?.ok) return ''
-    return normalizeLyricsText(String(result.lyrics || '').trim())
-  } catch {
-    return ''
-  }
-}
-
-const fetchLyricsFromPopcat = async (artist, title) => {
-  return fetchLyricsFromMakeItPersonal(artist, title)
-}
-
-const extractLrcLibLyrics = (item) => {
-  if (!item) {
-    return ''
-  }
-  const synced = normalizeLyricsText(item?.syncedLyrics)
-  if (synced) {
-    return synced
-  }
-  return normalizeLyricsText(item?.plainLyrics)
-}
-
 const fetchLyricsFromLrcLib = async (artist, title) => {
   try {
     if (window?.novaPlayer?.fetchLyricsFromLrcLib) {
@@ -2797,15 +2899,16 @@ const fetchLyricsFromLrcLib = async (artist, title) => {
       }
     }
   } catch {
-    // fallback below
+    // LRCLIB is the only lyrics source; failures fall through to not found.
   }
-  return fetchLyricsFromMakeItPersonal(artist, title)
+  return ''
 }
 
 const fetchLyricsForTrack = async (track) => {
   if (LYRICS_TEMP_DISABLED) {
     return ''
   }
+  const startedAt = Date.now()
   const titleVariants = Array.from(
     new Set([cleanTrackTitleForLyrics(track?.title || ''), track?.title || ''].filter(Boolean)),
   )
@@ -2818,13 +2921,18 @@ const fetchLyricsForTrack = async (track) => {
 
   for (const artist of artistVariants) {
     for (const title of titleVariants) {
+      const elapsed = Date.now() - startedAt
+      const remaining = LYRICS_SEARCH_TIMEOUT_MS - elapsed
+      if (remaining <= 0) {
+        return ''
+      }
       try {
-        const lyricText = await withTimeout(fetchLyricsFromLrcLib(artist, title), 7000, '')
+        const lyricText = await withTimeout(fetchLyricsFromLrcLib(artist, title), remaining, '')
         if (lyricText) {
           return lyricText
         }
       } catch {
-        // try next source
+        // Try the next LRCLIB query variant until the total 20 second budget ends.
       }
     }
   }
@@ -2860,6 +2968,7 @@ const materializeTrack = (record, urlsRef) => {
 const serializeTrack = (track) => {
   const persistentAudioUrl = String(track?.audioUrl || '').trim()
   const persistentCoverUrl = String(track?.coverUrl || '').trim()
+  const persistentCoverRemoteUrl = getTrackPublicCoverUrl(track)
   const canPersistAudioUrl = persistentAudioUrl && !persistentAudioUrl.startsWith('blob:')
   const canPersistCoverUrl = persistentCoverUrl && !persistentCoverUrl.startsWith('blob:')
 
@@ -2869,6 +2978,7 @@ const serializeTrack = (track) => {
       ...rest,
       audioUrl: normalizeDriveUrl(track.audioUrl || ''),
       coverUrl: track?.coverBlob ? '' : normalizeDriveUrl(track.coverUrl || ''),
+      coverRemoteUrl: persistentCoverRemoteUrl,
     }
   }
 
@@ -2881,6 +2991,7 @@ const serializeTrack = (track) => {
     ...rest,
     audioUrl: canPersistAudioUrl ? persistentAudioUrl : '',
     coverUrl: canPersistCoverUrl ? persistentCoverUrl : '',
+    coverRemoteUrl: persistentCoverRemoteUrl,
   }
 }
 
@@ -2949,6 +3060,7 @@ function App() {
   const lyricsPrefetchInFlightRef = useRef(new Set())
   const coverRepairInFlightRef = useRef(new Set())
   const coverLocalizeInFlightRef = useRef(new Set())
+  const coverRemoteBackfillInFlightRef = useRef(new Set())
   const artistCatalogPrefetchInFlightRef = useRef(new Set())
   const ytmSearchCacheRef = useRef(loadJsonCache(YTM_SEARCH_CACHE_KEY))
   const ytmAlbumTracksCacheRef = useRef(loadJsonCache(YTM_ALBUM_TRACKS_CACHE_KEY))
@@ -3004,6 +3116,9 @@ function App() {
     savedUi.sharedManifestUrl || DEFAULT_SHARED_MANIFEST_URL,
   )
   const [themeMode, setThemeMode] = useState(savedUi.themeMode || 'dark')
+  const [customThemeColor, setCustomThemeColor] = useState(
+    normalizeHexColor(savedUi.customThemeColor, '#3b82f6'),
+  )
   const defaultBackgroundPalette = getDefaultBackgroundPalette(savedUi.themeMode || 'dark')
   const [backgroundStyle, setBackgroundStyle] = useState(
     savedUi.backgroundStyle === 'solid' ? 'solid' : 'gradient',
@@ -3057,6 +3172,9 @@ function App() {
   )
   const [sidebarPlayerExpanded, setSidebarPlayerExpanded] = useState(
     savedUi.sidebarPlayerExpanded !== false,
+  )
+  const [sidebarPlayerSide, setSidebarPlayerSide] = useState(
+    savedUi.sidebarPlayerSide === 'left' ? 'left' : 'right',
   )
   const [windowCanUseSidebarPlayer, setWindowCanUseSidebarPlayer] = useState(false)
   const [windowIsMaximized, setWindowIsMaximized] = useState(false)
@@ -3991,11 +4109,11 @@ function App() {
     return brightness >= 176 ? '#0f172a' : '#ffffff'
   }, [currentThemeColor, effectiveBackgroundColor1, themeMode])
   const themeVars = {
-    ...getUiThemeVars(themeMode),
+    ...getUiThemeVars(themeMode, customThemeColor),
     ...(brightGradientReadabilityVars || {}),
     '--app-bg': effectiveAppBackground,
-    '--theme-accent': hexToRgba(currentThemeColor, 0.24),
-    '--theme-accent-soft': hexToRgba(currentThemeColor, 0.08),
+    '--theme-accent': hexToRgba(themeMode === 'custom' ? customThemeColor : currentThemeColor, 0.24),
+    '--theme-accent-soft': hexToRgba(themeMode === 'custom' ? customThemeColor : currentThemeColor, 0.08),
     '--topbar-title-color': topbarTitleColor,
   }
   const runtimeLowPowerEnabled = true
@@ -4008,10 +4126,11 @@ function App() {
   const effectiveFullscreenEffectsEnabled =
     Boolean(fullscreenEffectsEnabled) && !reduceAnimationsEnabled && !isLowCoreDevice
   const sidebarPlayerActive = sidebarPlayerExpanded && windowCanUseSidebarPlayer
+  const sidebarPlayerIsLeft = sidebarPlayerActive && sidebarPlayerSide === 'left'
   const lyricsViewActive = lyricsOpen || (sidebarPlayerActive && rightPanelTab === 'lyrics')
   const bottomDockVisible =
     dockPointerInside || dockProximityVisible || dockPlaylistMenuOpen || queueOpen || lyricsOpen
-  const appShellLayoutClass = `${appShellClassName} ${sidebarPlayerActive ? 'sidebar-player-expanded' : 'sidebar-player-collapsed'} ${windowCanUseSidebarPlayer ? 'window-fill' : ''} ${selectedCollectionId === 'home' ? 'collection-home' : ''} ${selectedCollectionId === 'all' ? 'collection-all' : ''}`.trim()
+  const appShellLayoutClass = `${appShellClassName} ${sidebarPlayerActive ? 'sidebar-player-expanded' : 'sidebar-player-collapsed'} ${sidebarPlayerIsLeft ? 'sidebar-player-left' : 'sidebar-player-right'} ${windowCanUseSidebarPlayer ? 'window-fill' : ''} ${selectedCollectionId === 'home' ? 'collection-home' : ''} ${selectedCollectionId === 'all' ? 'collection-all' : ''}`.trim()
   const activeMonthlyKey = selectedCollectionId.startsWith('monthly:')
     ? selectedCollectionId.slice('monthly:'.length)
     : ''
@@ -4068,12 +4187,13 @@ function App() {
     () => [...firstRunMissingBase, ...firstRunMissingPython].filter(Boolean),
     [firstRunMissingBase, firstRunMissingPython],
   )
-  const dependencyInstallCommands = [
-    dependencyMissingBase.includes('python') ? 'winget install Python.Python.3.12' : '',
-    dependencyMissingBase.includes('yt-dlp') ? 'winget install yt-dlp' : '',
-    dependencyMissingBase.includes('ffmpeg') ? 'winget install ffmpeg' : '',
-    dependencyMissingPython.includes('ytmusicapi') ? 'python -m pip install --user ytmusicapi' : '',
-  ]
+  const appPlatform = window?.novaPlayer?.platform || ''
+  const defaultDependencyInstallCommands = ['python', 'yt-dlp', 'ffmpeg', 'ytmusicapi']
+    .map((dep) => getDependencyInstallCommand(dep, appPlatform))
+    .filter(Boolean)
+    .join('\n')
+  const dependencyInstallCommands = dependencyMissingAll
+    .map((dep) => getDependencyInstallCommand(dep, appPlatform))
     .filter(Boolean)
     .join('\n')
   const activeTxtImportNoticeId = playlistTxtImportNoticeIdRef.current
@@ -5379,7 +5499,7 @@ function App() {
   }
 
   const persistTrackCoverLocally = useCallback(async (track) => {
-    const remoteUrl = String(track?.coverRemoteUrl || track?.coverUrl || '').trim()
+    const remoteUrl = getTrackPublicCoverUrl(track)
     const currentLocalCoverUrl = String(track?.coverUrl || '').trim()
     if (!track?.id || !remoteUrl || track?.coverBlob) {
       return false
@@ -5405,6 +5525,7 @@ function App() {
 
       updateTrack(track.id, {
         coverUrl: localCoverUrl,
+        coverRemoteUrl: remoteUrl,
         coverName: track?.coverName || coverFileName,
       })
       return true
@@ -6334,18 +6455,18 @@ function App() {
       return
     }
     deps.forEach((dep) => {
-      const link = DEPENDENCY_DOWNLOAD_LINKS[dep]
+      const link = getDependencyDownloadLink(dep, appPlatform)
       if (link) window.novaPlayer?.openExternal?.(link)
     })
     setDependencyRestartNotice(true)
     showUploadNotice('İndirme sayfaları açıldı. Kurup uygulamayı yeniden başlat.')
-  }, [dependencyStatus, showUploadNotice])
+  }, [appPlatform, dependencyStatus, showUploadNotice])
 
   const handleDependencyLinkClick = useCallback((dep) => {
-    const link = DEPENDENCY_DOWNLOAD_LINKS[dep] || 'https://github.com'
+    const link = getDependencyDownloadLink(dep, appPlatform) || 'https://github.com'
     window.novaPlayer?.openExternal?.(link)
     setDependencyRestartNotice(true)
-  }, [])
+  }, [appPlatform])
 
   const openDependencyNoticeFromConsole = useCallback(async () => {
     try {
@@ -6492,13 +6613,13 @@ function App() {
       return
     }
     deps.forEach((dep) => {
-      const link = DEPENDENCY_DOWNLOAD_LINKS[dep]
+      const link = getDependencyDownloadLink(dep, appPlatform)
       if (link) window.novaPlayer?.openExternal?.(link)
     })
     setDependencyRestartNotice(true)
     showUploadNotice('İndirme sayfaları açıldı. Kurulumdan sonra devam et.')
     setFirstRunDependencyLoading(false)
-  }, [firstRunDependencyStatus, showUploadNotice])
+  }, [appPlatform, firstRunDependencyStatus, showUploadNotice])
 
   const completeFirstRunWizard = useCallback(() => {
     localStorage.setItem(FIRST_RUN_ONBOARDING_KEY, 'done')
@@ -7896,11 +8017,12 @@ function App() {
         setPoolGithubBranch(String(prefs.poolGithubBranch || '').trim() || 'main')
         setPoolGithubPath(String(prefs.poolGithubPath || '').trim() || 'tracks.json')
         setPoolGithubToken(String(prefs.poolGithubToken || '').trim())
-        const resolvedThemeMode = ['dark', 'gray', 'light', 'transparent'].includes(prefs.themeMode)
+        const resolvedThemeMode = ['dark', 'gray', 'light', 'transparent', 'custom'].includes(prefs.themeMode)
           ? prefs.themeMode
           : 'dark'
         const defaultPalette = getDefaultBackgroundPalette(resolvedThemeMode)
         setThemeMode(resolvedThemeMode)
+        setCustomThemeColor(normalizeHexColor(prefs.customThemeColor, '#3b82f6'))
         setBackgroundStyle(prefs.backgroundStyle === 'solid' ? 'solid' : 'gradient')
         setCoverBasedBackgroundEnabled(Boolean(prefs.coverBasedBackgroundEnabled))
         setBackgroundColor1(normalizeHexColor(prefs.backgroundColor1, defaultPalette.color1))
@@ -7918,6 +8040,7 @@ function App() {
         setArrowSeekEnabled(prefs.arrowSeekEnabled !== false)
         setResetShortcutEnabled(prefs.resetShortcutEnabled !== false)
         setSidebarPlayerExpanded(prefs.sidebarPlayerExpanded !== false)
+        setSidebarPlayerSide(prefs.sidebarPlayerSide === 'left' ? 'left' : 'right')
         const restoredShuffleEnabled = Boolean(prefs.shuffleEnabled)
         const restoredRepeatEnabled = Boolean(prefs.repeatEnabled) && !restoredShuffleEnabled
         setShuffleEnabled(restoredShuffleEnabled)
@@ -7978,6 +8101,7 @@ function App() {
       equalizerGains,
       audioOutputId: selectedAudioOutputId,
       themeMode,
+      customThemeColor,
       backgroundStyle,
       coverBasedBackgroundEnabled,
       backgroundColor1,
@@ -7989,6 +8113,7 @@ function App() {
       resetShortcutEnabled,
       mediaToggleShortcut,
       sidebarPlayerExpanded,
+      sidebarPlayerSide,
       shuffleEnabled,
       repeatEnabled,
       consoleAccessHash,
@@ -8017,6 +8142,7 @@ function App() {
       equalizerGains,
       selectedAudioOutputId,
       themeMode,
+      customThemeColor,
       backgroundStyle,
       coverBasedBackgroundEnabled,
       backgroundColor1,
@@ -8029,6 +8155,7 @@ function App() {
       resetShortcut,
       mediaToggleShortcut,
       sidebarPlayerExpanded,
+      sidebarPlayerSide,
       shuffleEnabled,
       repeatEnabled,
       consoleAccessHash,
@@ -8065,11 +8192,11 @@ function App() {
 
     let cancelled = false
     const candidates = tracks.filter((track) => {
-      const remoteUrl = String(track?.coverRemoteUrl || track?.coverUrl || '').trim()
+      const remoteUrl = getTrackPublicCoverUrl(track)
       if (!track?.id || !remoteUrl || track?.coverBlob) {
         return false
       }
-      if (remoteUrl.startsWith('blob:') || remoteUrl.startsWith('data:')) {
+      if (isLocalLikeAssetUrl(String(track?.coverUrl || '').trim())) {
         return false
       }
       if (coverLocalizeInFlightRef.current.has(track.id)) {
@@ -8101,6 +8228,65 @@ function App() {
       cancelled = true
     }
   }, [isHydrated, persistTrackCoverLocally, tracks])
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return undefined
+    }
+
+    let cancelled = false
+    const candidates = tracks
+      .filter((track) => {
+        if (!track?.id || !track?.title || !track?.artist) return false
+        if (getTrackPublicCoverUrl(track)) return false
+        if (coverRemoteBackfillInFlightRef.current.has(track.id)) return false
+        return true
+      })
+      .slice(0, appBackgrounded ? 2 : 4)
+
+    if (!candidates.length) {
+      return undefined
+    }
+
+    const runQueue = async () => {
+      for (const track of candidates) {
+        if (cancelled) break
+        coverRemoteBackfillInFlightRef.current.add(track.id)
+        try {
+          const cacheKey = `${normalizeArtistQuery(track.artist)}|${cleanFilenameTrackTitle(track.title) || track.title}`.toLowerCase()
+          const cachedCover = String(getLruCacheValue(coverArtCacheRef.current, cacheKey) || '').trim()
+          if (cachedCover && /^https:\/\//i.test(cachedCover)) {
+            updateTrack(track.id, { coverRemoteUrl: cachedCover })
+            continue
+          }
+
+          const remoteMeta = await fetchRemoteTrackMetaSmart(track.title, track.artist, {
+            preferredAlbum: track.album || '',
+            preferredDuration: Number(track.duration || 0),
+          })
+          const remoteCover = String(remoteMeta?.coverUrl || '').trim()
+          if (cancelled || !/^https:\/\//i.test(remoteCover)) {
+            continue
+          }
+
+          setLruCacheValue(coverArtCacheRef.current, cacheKey, remoteCover, MAX_COVER_CACHE_ENTRIES)
+          saveJsonCache(COVER_ART_CACHE_KEY, coverArtCacheRef.current)
+          updateTrack(track.id, { coverRemoteUrl: remoteCover })
+        } catch {
+          // Remote artwork backfill is best-effort and should never block playback.
+        } finally {
+          coverRemoteBackfillInFlightRef.current.delete(track.id)
+        }
+        await new Promise((resolve) => scheduleIdle(resolve))
+      }
+    }
+
+    runQueue().catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [appBackgrounded, isHydrated, tracks])
 
   useEffect(() => {
     if (!isHydrated) {
@@ -8202,6 +8388,7 @@ function App() {
         equalizerGains: snapshot.equalizerGains,
         audioOutputId: selectedAudioOutputId,
         themeMode,
+        customThemeColor,
         backgroundStyle,
         coverBasedBackgroundEnabled,
         backgroundColor1,
@@ -8213,6 +8400,7 @@ function App() {
         resetShortcutEnabled,
         mediaToggleShortcut,
         sidebarPlayerExpanded,
+        sidebarPlayerSide,
         shuffleEnabled,
         repeatEnabled,
         consoleAccessHash,
@@ -8248,6 +8436,7 @@ function App() {
     spaceKeyPlaybackEnabled,
     resetShortcutEnabled,
     sidebarPlayerExpanded,
+    sidebarPlayerSide,
     backgroundStyle,
     coverBasedBackgroundEnabled,
     backgroundColor1,
@@ -8263,6 +8452,7 @@ function App() {
     consoleAccessSalt,
     shuffleEnabled,
     themeMode,
+    customThemeColor,
     runtimeLowPowerEnabled,
     isLowCoreDevice,
   ])
@@ -8678,7 +8868,7 @@ function App() {
         duration: duration,
         collection: activeCollectionLabel,
         album: currentTrack?.album || '',
-        coverUrl: getTrackCoverUrl(currentTrack),
+        coverUrl: getTrackDiscordCoverUrl(currentTrack),
         audioUrl: currentTrack?.audioUrl || '',
       },
       isPlaying,
@@ -9201,8 +9391,8 @@ function App() {
       settled = true
       setLyricsLoading(false)
       setLyricsText('')
-      setLyricsError('Sözler bulunamadı.')
-    }, 10000)
+      setLyricsError(t('lyricsNotFound', 'Sözler bulunamadı.'))
+    }, LYRICS_SEARCH_TIMEOUT_MS)
 
     const loadLyrics = async () => {
       try {
@@ -9222,13 +9412,13 @@ function App() {
           setLyricsError('')
         } else {
           setLyricsText('')
-          setLyricsError('Sözler bulunamadı.')
+          setLyricsError(t('lyricsNotFound', 'Sözler bulunamadı.'))
         }
       } catch {
         if (!cancelled && !settled) {
           settled = true
           window.clearTimeout(timeout)
-          setLyricsError('Sözler bulunamadı.')
+          setLyricsError(t('lyricsNotFound', 'Sözler bulunamadı.'))
           setLyricsText('')
         }
       } finally {
@@ -9244,7 +9434,7 @@ function App() {
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [currentTrack, getLyricsCacheKeyForTrack, lyricsOpen, sidebarPlayerActive, updateTrack])
+  }, [currentTrack, getLyricsCacheKeyForTrack, lyricsOpen, sidebarPlayerActive, t, updateTrack])
 
   useEffect(() => {
     return undefined
@@ -9380,6 +9570,7 @@ function App() {
       language,
       sharedManifestUrl,
       backgroundStyle,
+      customThemeColor,
       coverBasedBackgroundEnabled,
       backgroundColor1,
       backgroundColor2,
@@ -9406,7 +9597,7 @@ function App() {
       compactListEnabled,
       showScrollbars,
     })
-  }, [arrowSeekEnabled, backgroundColor1, backgroundColor2, backgroundStyle, closeBehavior, compactListEnabled, coverBasedBackgroundEnabled, fullscreenEffectsEnabled, hardwareAccelerationEnabled, language, launchOnStartupEnabled, lowPowerModeEnabled, mediaToggleShortcut, monoAudioEnabled, playlistRailCollapsed, preventSleepWhilePlayingEnabled, reduceAnimationsEnabled, resetShortcutEnabled, resetShortcut, sharedManifestUrl, showScrollbars, spaceKeyPlaybackEnabled, themeMode])
+  }, [arrowSeekEnabled, backgroundColor1, backgroundColor2, backgroundStyle, closeBehavior, compactListEnabled, coverBasedBackgroundEnabled, customThemeColor, fullscreenEffectsEnabled, hardwareAccelerationEnabled, language, launchOnStartupEnabled, lowPowerModeEnabled, mediaToggleShortcut, monoAudioEnabled, playlistRailCollapsed, preventSleepWhilePlayingEnabled, reduceAnimationsEnabled, resetShortcutEnabled, resetShortcut, sharedManifestUrl, showScrollbars, spaceKeyPlaybackEnabled, themeMode])
 
   useEffect(() => {
     if (!isHydrated || !manualTrackRepairRequest) {
@@ -10013,15 +10204,15 @@ function App() {
         setLyricsError('')
       } else {
         setLyricsText('')
-        setLyricsError('Sözler bulunamadı.')
+        setLyricsError(t('lyricsNotFound', 'Sözler bulunamadı.'))
       }
     } catch {
       setLyricsText('')
-      setLyricsError('Sözler bulunamadı.')
+      setLyricsError(t('lyricsNotFound', 'Sözler bulunamadı.'))
     } finally {
       setLyricsLoading(false)
     }
-  }, [currentTrack, getLyricsCacheKeyForTrack, updateTrack])
+  }, [currentTrack, getLyricsCacheKeyForTrack, t, updateTrack])
 
   const handleUpdaterDownloadNow = async () => {
     try {
@@ -10298,7 +10489,10 @@ function App() {
     setSpotifyAuthLoading(true)
     try {
       showUploadNotice('Spotify giriş sayfası tarayıcıda açılıyor...')
-      const result = await window.novaPlayer.connectSpotifyAccount()
+      const result = await window.novaPlayer.connectSpotifyAccount({
+        clientId: String(spotifyClientId || ''),
+        clientSecret: String(spotifyClientSecret || ''),
+      })
       if (!result?.ok || !result?.connected) {
         const rawError = String(result?.error || '').trim()
         if (rawError.includes('spotify-scope-missing')) {
@@ -10315,7 +10509,7 @@ function App() {
     } finally {
       setSpotifyAuthLoading(false)
     }
-  }, [refreshSpotifyAuthStatus, showUploadNotice])
+  }, [refreshSpotifyAuthStatus, showUploadNotice, spotifyClientId, spotifyClientSecret])
 
   const disconnectSpotifyAccount = useCallback(async () => {
     if (!window?.novaPlayer?.disconnectSpotifyAccount) return
@@ -14392,17 +14586,29 @@ function App() {
                     { value: 'gray', label: t('gray', 'Grimsi') },
                     { value: 'light', label: t('light', 'Açık') },
                     { value: 'transparent', label: t('transparent', 'Şeffaf') },
+                    { value: 'custom', label: t('customTheme', 'Özel renk') },
                   ].map((item) => (
                     <button
                       key={`first-run-theme-${item.value}`}
                       type="button"
-                      className={`menu-item ${themeMode === item.value ? 'selected' : ''}`}
+                      className={`menu-item ${item.value === 'custom' ? 'custom-theme-option' : ''} ${themeMode === item.value ? 'selected' : ''}`.trim()}
                       onClick={() => setThemeMode(item.value)}
                     >
-                      {item.label}
+                      <span>{item.label}</span>
+                      {item.value === 'custom' ? <small>{language === 'en' ? 'NEW' : 'YENİ'}</small> : null}
                     </button>
                   ))}
                 </div>
+                {themeMode === 'custom' ? (
+                  <label className="settings-color-field first-run-color-field">
+                    <span>{t('themeColor', 'Tema rengi')}</span>
+                    <input
+                      type="color"
+                      value={customThemeColor}
+                      onChange={(event) => setCustomThemeColor(event.target.value)}
+                    />
+                  </label>
+                ) : null}
                 <p className="about-title">{t('firstRunLanguageTitle', 'Dil')}</p>
                 <div className="menu-options">
                   {[
@@ -15425,7 +15631,7 @@ function App() {
                 readOnly
                 value={
                   dependencyInstallCommands ||
-                  'winget install Python.Python.3.12\nwinget install yt-dlp\nwinget install ffmpeg\npython -m pip install --user ytmusicapi'
+                  defaultDependencyInstallCommands
                 }
               />
 
@@ -15443,7 +15649,7 @@ function App() {
                   onClick={async () => {
                     const text =
                       dependencyInstallCommands ||
-                      'winget install Python.Python.3.12\nwinget install yt-dlp\nwinget install ffmpeg\npython -m pip install --user ytmusicapi'
+                      defaultDependencyInstallCommands
                     try {
                       await navigator.clipboard.writeText(text)
                       showUploadNotice(t('installCommandsCopied', 'Kurulum komutları panoya kopyalandı.'))
@@ -16007,17 +16213,32 @@ function App() {
                                 ['gray', t('gray', 'Grimsi')],
                                 ['light', t('light', 'Açık')],
                                 ['transparent', t('transparent', 'Şeffaf')],
+                                ['custom', t('customTheme', 'Özel renk')],
                               ].map(([value, label]) => (
                                 <button
                                   key={value}
                                   type="button"
-                                  className={`menu-item ${themeMode === value ? 'selected' : ''}`}
+                                  className={`menu-item ${value === 'custom' ? 'custom-theme-option' : ''} ${themeMode === value ? 'selected' : ''}`.trim()}
                                   onClick={() => setThemeMode(value)}
                                 >
                                   <span>{label}</span>
+                                  {value === 'custom' ? <small>{language === 'en' ? 'NEW' : 'YENİ'}</small> : null}
                                 </button>
                               ))}
                             </div>
+                            {themeMode === 'custom' ? (
+                              <div className="settings-custom-theme-picker">
+                                <p className="settings-help-text">{t('customThemeHint', 'Koyu, gri ve açık dışında kendi ana rengini seç.')}</p>
+                                <label className="settings-color-field">
+                                  <span>{t('themeColor', 'Tema rengi')}</span>
+                                  <input
+                                    type="color"
+                                    value={customThemeColor}
+                                    onChange={(event) => setCustomThemeColor(event.target.value)}
+                                  />
+                                </label>
+                              </div>
+                            ) : null}
                           </section>
 
                           <section className="settings-section">
@@ -19173,12 +19394,20 @@ function App() {
         <MotionSection
           key="sidebar-player-panel"
           className="player-panel glass"
-          initial={{ opacity: 0, x: 64, y: 18, scale: 0.985 }}
+          initial={{ opacity: 0, x: sidebarPlayerSide === 'left' ? -64 : 64, y: 18, scale: 0.985 }}
           animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-          exit={{ opacity: 0, x: 38, y: 54, scale: 0.985 }}
+          exit={{ opacity: 0, x: sidebarPlayerSide === 'left' ? -38 : 38, y: 54, scale: 0.985 }}
           transition={{ type: 'spring', stiffness: 270, damping: 26, mass: 0.85 }}
         >
           <div className="player-panel-tools">
+            <button
+              className="icon-button"
+              onClick={() => setSidebarPlayerSide((prev) => (prev === 'left' ? 'right' : 'left'))}
+              aria-label={sidebarPlayerSide === 'left' ? t('movePlayerRight', 'Playerı sağa al') : t('movePlayerLeft', 'Playerı sola al')}
+              title={sidebarPlayerSide === 'left' ? t('movePlayerRight', 'Playerı sağa al') : t('movePlayerLeft', 'Playerı sola al')}
+            >
+              {sidebarPlayerSide === 'left' ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+            </button>
             <button
               className="icon-button"
               onClick={openFullscreenTrack}
@@ -19491,6 +19720,7 @@ function App() {
                 value={volume}
                 onChange={handleVolumeChange}
               />
+              <span className="volume-percent-label">{`${Math.round((Number(volume) || 0) * 100)}%`}</span>
             </div>
           </div>
 
@@ -19911,10 +20141,23 @@ function App() {
                   <div className="fullscreen-inline-lyrics">
                     <div className="fullscreen-inline-lyrics-body">
                       {lyricsLoading ? <p>{t('lyricsLoading', 'Sözler yükleniyor...')}</p> : null}
-                      {!lyricsLoading && lyricsError ? <p>{lyricsError}</p> : null}
-                      {!lyricsLoading && !lyricsError && lyricsText
+                      {!lyricsLoading && lyricsText
                         ? renderLyricsContent('fullscreen-lyrics-text', { interactive: parsedLyrics.hasTiming, visibleWindow: 10 })
                         : null}
+                      {!lyricsLoading && !lyricsText ? (
+                        <div className="player-lyrics-empty">
+                          <p>{lyricsError || t('lyricsNotFound', 'Sözler bulunamadı.')}</p>
+                          <div className="editor-actions">
+                            <button className="mini-button ghost" onClick={() => lyricsFileInputRef.current?.click()}>
+                              <Upload size={14} />
+                              {t('uploadTxt', 'TXT yükle')}
+                            </button>
+                            <button className="mini-button ghost" onClick={handleRetryLyricsSearch}>
+                              {t('retrySearch', 'Tekrar ara')}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
@@ -20767,8 +21010,21 @@ function App() {
               </div>
               <div className="lyrics-panel-body">
                 {lyricsLoading ? <p>{t('lyricsLoading', 'Sözler yükleniyor...')}</p> : null}
-                {!lyricsLoading && lyricsError ? <p>{lyricsError}</p> : null}
-                {!lyricsLoading && !lyricsError && lyricsText ? renderLyricsContent('', { visibleWindow: 18 }) : null}
+                {!lyricsLoading && lyricsText ? renderLyricsContent('', { visibleWindow: 18 }) : null}
+                {!lyricsLoading && !lyricsText ? (
+                  <div className="player-lyrics-empty">
+                    <p>{lyricsError || t('lyricsNotFound', 'Sözler bulunamadı.')}</p>
+                    <div className="editor-actions">
+                      <button className="mini-button ghost" onClick={() => lyricsFileInputRef.current?.click()}>
+                        <Upload size={14} />
+                        {t('uploadTxt', 'TXT yükle')}
+                      </button>
+                      <button className="mini-button ghost" onClick={handleRetryLyricsSearch}>
+                        {t('retrySearch', 'Tekrar ara')}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>,
             document.body,

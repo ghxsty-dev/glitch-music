@@ -27,6 +27,26 @@ pip install ytmusicapi
 winget install yt-dlp
 ```
 
+## Linux
+```bash
+sudo apt update
+sudo apt install -y python3 python3-pip ffmpeg
+python3 -m pip install --user -U ytmusicapi yt-dlp
+```
+
+Build Linux packages on Linux or WSL2 from a project folder inside the Linux filesystem, not from `/mnt/c`:
+
+```bash
+npm ci
+npm run dist:linux
+```
+
+To publish Linux artifacts to GitHub Releases:
+
+```bash
+npm run dist:linux:github
+```
+
 ---
 
 ## Photos in App

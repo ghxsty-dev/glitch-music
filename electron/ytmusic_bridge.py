@@ -107,6 +107,41 @@ def classify_release(row, title=""):
     return "single" if is_single_ep(title) else "album"
 
 
+def format_lrc_timestamp(ms_value):
+    try:
+        total_ms = max(0, int(ms_value or 0))
+    except Exception:
+        total_ms = 0
+    total_seconds = total_ms // 1000
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    centiseconds = (total_ms % 1000) // 10
+    return f"{minutes:02d}:{seconds:02d}.{centiseconds:02d}"
+
+
+def serialize_lyrics_payload(raw_lyrics):
+    if not isinstance(raw_lyrics, dict):
+        return ""
+    lyrics = raw_lyrics.get("lyrics")
+    if isinstance(lyrics, str):
+        return lyrics.strip()
+    if isinstance(lyrics, list):
+        lines = []
+        for item in lyrics:
+            text = safe_text(getattr(item, "text", "") or (item.get("text") if isinstance(item, dict) else ""))
+            if not text:
+                continue
+            start = getattr(item, "start_time", None)
+            if start is None and isinstance(item, dict):
+                start = item.get("start_time")
+            if start is None:
+                lines.append(text)
+            else:
+                lines.append(f"[{format_lrc_timestamp(start)}]{text}")
+        return "\n".join(lines).strip()
+    return ""
+
+
 def best_artist_hit(artist_hits, artist_name):
     target = norm(artist_name)
     best = None
@@ -591,6 +626,85 @@ def main():
                     }
                 )
             print(json.dumps({"ok": True, "tracks": tracks, "title": safe_text(playlist.get("title"))}))
+            return
+
+        if action == "lyrics":
+            title = safe_text(payload.get("title"))
+            artist = safe_text(payload.get("artist"))
+            video_id = safe_text(payload.get("videoId"))
+            if not video_id and (not title or not artist):
+                print(json.dumps({"ok": False, "lyrics": "", "error": "missing-title-or-artist"}))
+                return
+
+            if not video_id:
+                try:
+                    rows = ytm.search(f"{artist} {title}", filter="songs", limit=6)
+                except Exception:
+                    rows = []
+                best_row = None
+                best_score = -1
+                title_key = norm(title)
+                artist_key = norm(artist)
+                for row in rows or []:
+                    row_title = safe_text(row.get("title"))
+                    row_artists = row.get("artists") or []
+                    row_artist = safe_text(row_artists[0].get("name")) if row_artists else ""
+                    row_video_id = safe_text(row.get("videoId"))
+                    if not row_video_id:
+                        continue
+                    score = 0
+                    row_title_key = norm(row_title)
+                    row_artist_key = norm(row_artist)
+                    if row_title_key == title_key:
+                        score += 100
+                    elif title_key and (title_key in row_title_key or row_title_key in title_key):
+                        score += 55
+                    if artist_key and (artist_key == row_artist_key or artist_key in row_artist_key or row_artist_key in artist_key):
+                        score += 90
+                    elif artist_match_relaxed(row_artist, artist):
+                        score += 48
+                    if score > best_score:
+                        best_score = score
+                        best_row = row
+                if best_row:
+                    video_id = safe_text(best_row.get("videoId"))
+
+            if not video_id:
+                print(json.dumps({"ok": False, "lyrics": "", "error": "song-not-found"}))
+                return
+
+            lyrics_browse_id = ""
+            try:
+                watch = ytm.get_watch_playlist(videoId=video_id, limit=1)
+                lyrics_browse_id = safe_text((watch or {}).get("lyrics"))
+            except Exception:
+                lyrics_browse_id = ""
+
+            if not lyrics_browse_id:
+                print(json.dumps({"ok": False, "lyrics": "", "error": "lyrics-not-found"}))
+                return
+
+            lyrics_text = ""
+            lyrics_source = ""
+            try:
+                timed = ytm.get_lyrics(lyrics_browse_id, timestamps=True)
+                lyrics_text = serialize_lyrics_payload(timed)
+                lyrics_source = safe_text((timed or {}).get("source"))
+            except Exception:
+                lyrics_text = ""
+
+            if not lyrics_text:
+                try:
+                    plain = ytm.get_lyrics(lyrics_browse_id, timestamps=False)
+                    lyrics_text = serialize_lyrics_payload(plain)
+                    lyrics_source = safe_text((plain or {}).get("source"))
+                except Exception:
+                    lyrics_text = ""
+
+            if lyrics_text:
+                print(json.dumps({"ok": True, "lyrics": lyrics_text, "source": lyrics_source or "ytmusicapi"}))
+            else:
+                print(json.dumps({"ok": False, "lyrics": "", "error": "lyrics-not-found"}))
             return
 
         if action == "similar_playlists":
