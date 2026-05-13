@@ -11,11 +11,12 @@ Installation
 
 
 # Windows
-```bashwinget install pythonwinget install ffmpegpip install ytmusicapiwinget install yt-dlp```
-
-# Linux
-
-```bashComing soon```
+```bash
+winget install python
+winget install ffmpeg
+pip install ytmusicapi
+winget install yt-dlp
+```
 
 # Photos in App
 
