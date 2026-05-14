@@ -1,11 +1,10 @@
-# GLITCH Music
 <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/GLITCHyazi%20(800%20x%20200%20piksel).png?raw=true&" width="1200" />
 
 - GLITCH Music is more than just a classic music player — it works like a complete personal music hub. It combines a local music library, YouTube Music search & downloading, playlist management, an advanced modern player, synchronized lyrics support, and artist/album discovery all in one application. On top of that, it offers extensive customization options including themes, transparency modes, performance settings, shortcuts, and behavioral preferences, all wrapped in a smooth desktop-focused interface.
 
 - What truly sets GLITCH Music apart from other players is its ecosystem-like experience. Features such as Discord Rich Presence integration, advanced in-app downloading and transfer workflows, monthly listening summaries and statistics, an offline-first design philosophy, and personalized recommendation/discovery systems make it much more than just a music player. It’s an app that helps you organize, discover, and personalize your entire music experience.
 
-- For Turkish README.md click here.
+- For Turkish README.md [click here.](https://github.com/ghxsty-dev/glitch-music/blob/main/README_TR.md)
 
 <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ads%C4%B1z%20tasar%C4%B1m(4).png?raw=true&" width="900" />
 
