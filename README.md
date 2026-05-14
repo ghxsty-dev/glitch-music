@@ -49,12 +49,22 @@ npm run dist:linux:github
 
 ---
 
+Discord-RPC
+
+<p align="center">
+  <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-05-14%20182955.png?raw=true&">
+
+---
+
 ## Photos in App
 
 <p align="center">
   <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20görüntüsü%202026-05-13%20172615.png?raw=true&">
   <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20görüntüsü%202026-05-13%20172629.png?raw=true&">
   <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20görüntüsü%202026-05-13%20172638.png?raw=true&">
+  <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-05-13%20232338.png?raw=true&">
+  <img src="https://github.com/ghxsty-dev/glitch-music/blob/main/.github/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-05-13%20233536.png?raw=true&">
+  
 </p>
 
 ## How to Use
